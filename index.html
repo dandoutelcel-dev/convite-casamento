@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nosso Convite de Casamento</title>
+    <style>
+        /* Configurações Gerais de Estilo */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-body: #1b6992;
+            --white: #fff;
+            --gold:#d3af37;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            font-family: 'Georgia', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            perspective: 1500px; /* Cria o efeito de profundidade 3D */
+        }
+
+        /* Canvas para as partículas/borboletas */
+        #canvas-borboletas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Garante que o usuário consiga interagir com o que está atrás */
+            z-index: 10; /* Fica por cima de tudo ao voar */
+        }
+
+        /* Container Principal do Convite */
+        .envelope-container {
+            position: relative;
+            width: 450px;
+            height: 600px;
+            max-width: 90%;
+            background: var(--white);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            border-radius: 4px;
+            /* Suaviza a transição do efeito de zoom (o valor do scale será controlado pelo JS) */
+            transition: transform 1.8s cubic-bezier(0.4, 0, 0.2, 1); 
+            z-index: 2;
+        }
+
+        /* Conteúdo Interno (O Convite em si) */
+        .convite-interno {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: #fffbf5;
+            border: 2px solid var(--gold);
+            border-radius: 4px;
+            color: #000000;
+            z-index: 1;
+        }
+
+        .convite-interno h1 {
+            font-size: 2.3rem;
+            margin-bottom: 20px;
+            color: var(--gold);
+            font-family: 'Times New Roman', serif;
+        }
+
+        .convite-interno p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .convite-interno .data {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-top: 20px;
+            color: var(--gold);
+            border-top: 1px solid var(--gold);
+            border-bottom: 1px solid var(--gold);
+            padding: 10px 0;
+            width: 80%;
+        }
+
+        /* Abas Laterais (Portas de Faroeste) */
+        .aba {
+            position: absolute;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            background-color: #e6dad0;
+            background-image: linear-gradient(135deg, #e6dad0 25%, #dfcbb5 100%);
+            z-index: 3;
+            transition: transform 1.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 1s ease-in-out;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        .aba-esquerda {
+            left: 0;
+            border-right: 1px solid rgba(0,0,0,0.1);
+            transform-origin: left center; /* Rotaciona a partir da borda esquerda */
+            border-radius: 4px 0 0 4px;
+        }
+
+        .aba-direita {
+            right: 0;
+            border-left: 1px solid rgba(0,0,0,0.1);
+            transform-origin: right center; /* Rotaciona a partir da borda direita */
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* O Selo de Cera */
+        .selo-cera {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, #E35336 0%, #952b16 100%);
+            border-radius: 50%;
+            z-index: 4;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3), inset 0 0 8px rgba(0,0,0,0.4);
+            border: 3px solid #782e18;
+            transition: all 0.5s ease;
+        }
+
+        /* Detalhe interno do selo simulando brasão/borda */
+        .selo-cera::before {
+            content: '';
+            position: absolute;
+            width: 76px;
+            height: 76px;
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 50%;
+        }
+
+        .selo-texto {
+            color: #f7ebeb;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+            font-weight: bold;
+            pointer-events: none; /* Garante que o clique passe para o botão do selo */
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+            z-index: 5;
+        }
+
+        /* Efeito de Hover no Selo */
+        .selo-cera:hover {
+            transform: translate(-50%, -50%) scale(1.08);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4), inset 0 0 8px rgba(0,0,0,0.4);
+        }
+
+        /* --- ESTADOS DE ANIMAÇÃO (ATIVADOS VIA JAVASCRIPT) --- */
+
+        /* Abre as portas para fora (estilo faroeste/porta dupla) */
+        .envelope-container.aberto .aba-esquerda {
+            transform: rotateY(-140deg);
+            opacity: 0; /* Desvanece para sumir da tela durante o super zoom */
+        }
+
+        .envelope-container.aberto .aba-direita {
+            transform: rotateY(140deg);
+            opacity: 0; /* Desvanece para sumir da tela durante o super zoom */
+        }
+
+        /* Some com o selo */
+        .envelope-container.aberto .selo-cera {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.5);
+            pointer-events: none;
+        }
+
+        a {
+            text-decoration: none;
+        }
+
+        .convite-interno p.local {
+            margin-bottom: 1px;
+            color: #000000;
+            animation-duration: 1s;
+        }
+        .convite-interno p.local:hover {
+            scale: 1.2;
+            color: #f6d259;
+            
+        }
+        .convite-interno p.clique {
+            font-size: smaller;
+            color: #000000;
+        }
+        button {
+            border: none;
+        }
+        .convite-interno .botao-whatsapp {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #25D366; /* Tom dourado do seu convite */
+            color: #ffffff;
+            text-decoration: none;
+            font-family: 'Georgia', serif;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(184, 151, 117, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        /* Efeito quando o usuário passa o mouse ou o dedo por cima */
+        .convite-interno .botao-whatsapp:hover {
+            background-color: var(--gold); /* Um dourado ligeiramente mais escuro */
+            transform: translateY(-2px); /* Eleva o botão de leve */
+            box-shadow: 0 6px 15px rgba(184, 151, 117, 0.4);
+        }
+
+        /* Efeito ao clicar */
+        .convite-interno .botao-whatsapp:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(184, 151, 117, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas-borboletas"></canvas>
+
+    <div class="envelope-container" id="envelope">
+        <div class="aba aba-esquerda"></div>
+        <div class="aba aba-direita"></div>
+
+        <div class="selo-cera" id="selo" onclick="abrirConvite()">
+            <span class="selo-texto">Clique<br>Para<br>Abrir</span>
+        </div>
+
+        <div class="convite-interno">
+            <h1>Ana Carolina & Daniel</h1>
+            <p>Convidam você para a tão esperada <br> ❤️ cerimônia de casamento ❤️</p>
+            
+            <div class="data">
+                22 . AGOSTO . 2026
+            </div>
+            
+            <p style="margin-top: 20px;">
+                Horário: 11 horas<br>
+            </p>
+            <a href="https://www.google.com/maps/place/Rancho+do+Cupim+%E2%80%93+S%C3%A3o+Jos%C3%A9+do+Rio+Preto/@-20.8344043,-49.4083128,17z/data=!3m1!4b1!4m6!3m5!1s0x94bdb287885753dd:0xea4cecf400151d58!8m2!3d-20.8344043!4d-49.4057379!16s%2Fg%2F113jydt0t?entry=ttu&g_ep=EgoyMDI2MDYxNi4wIKXMDSoASAFQAw%3D%3D" target="_blank">
+                <p class="local">Local: Rancho do Cupim</p>
+            </a>
+            <p class="clique">🠕 clique para acessar a localização 🠕</p>
+            <button>
+                <a href="https://wa.me/5517981106679?text=Olá!%20Gostaria%20de%20confirmar%20minha%20presença%20na%20cerimônia%20de%20casamento%20de%20Ana%20Carolina%20e%20Daniel." 
+                target="_blank" 
+                class="botao-whatsapp">
+                Confirmar presença via WhatsApp <br> até dia 12/08
+                </a>
+            </button>
+            <p style="margin-top: 10px;">
+                Sua presença é indispensável para nossa comemoração!
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Configuração do Canvas
+        const canvas = document.getElementById('canvas-borboletas');
+        const ctx = canvas.getContext('2d');
+
+        function redimensionarCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', redimensionarCanvas);
+        redimensionarCanvas();
+
+        // Classe que define cada borboleta (partícula)
+        class Borboleta {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.tamanho = Math.random() * 6 + 4; // Tamanho da asa
+                this.velocidadeX = (Math.random() - 0.5) * 6; // Movimento lateral expandido
+                this.velocidadeY = -Math.random() * 4 - 3;   // Movimento para cima mais rápido
+                this.anguloAsa = 0;
+                this.velocidadeAsa = Math.random() * 0.3 + 0.1; // Velocidade do bater de asas
+                this.opacidade = 1;
+                // Tons pastéis de dourado/rose gold combinando com o convite
+                this.cor = `hsla(${Math.random() * 20 + 30}, 60%, 70%, `; 
+            }
+
+            atualizar() {
+                this.x += this.velocidadeX;
+                this.y += this.velocidadeY;
+                this.anguloAsa += this.velocidadeAsa;
+                this.opacidade -= 0.004; // Desvanece ligeiramente mais devagar para preencher a tela
+            }
+
+            desenhar() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // Desenha a asa esquerda (simulando 3D variando a largura com Math.sin)
+                ctx.fillStyle = this.cor + this.opacidade + ')';
+                ctx.beginPath();
+                ctx.ellipse(-this.tamanho/2, 0, Math.abs(Math.sin(this.anguloAsa)) * this.tamanho, this.tamanho * 1.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Desenha a asa direita
+                ctx.beginPath();
+                ctx.ellipse(this.tamanho/2, 0, Math.abs(Math.sin(this.anguloAsa)) * this.tamanho, this.tamanho * 1.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        const listaBorboletas = [];
+
+        function animarParticulas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < listaBorboletas.length; i++) {
+                listaBorboletas[i].atualizar();
+                listaBorboletas[i].desenhar();
+
+                if (listaBorboletas[i].opacidade <= 0) {
+                    listaBorboletas.splice(i, 1);
+                    i--;
+                }
+            }
+            requestAnimationFrame(animarParticulas);
+        }
+
+        // Função inteligente para calcular o zoom ideal baseado no tamanho da tela do usuário
+        function aplicarZoomMaximo() {
+            const envelope = document.getElementById('envelope');
+            
+            // Só calcula se o envelope estiver de fato aberto
+            if (!envelope.classList.contains('aberto')) return;
+
+            const larguraTela = window.innerWidth;
+            const alturaTela = window.innerHeight;
+            
+            // Dimensões base do convite no CSS (450x600)
+            const larguraConvite = 450;
+            const alturaConvite = 600;
+
+            // Calcula a proporção necessária para preencher a tela na largura e altura
+            const escalaX = larguraTela / larguraConvite;
+            const escalaY = alturaTela / alturaConvite;
+
+            // Escolhe o menor multiplicador para garantir que a mensagem caiba inteira sem cortar em telas menores (ex: celulares)
+            // Se quiser forçar o preenchimento absoluto independente de cortes leves, mude Math.min para Math.max
+            let escalaFinal = Math.min(escalaX, escalaY);
+
+            // Adiciona uma pequena margem de segurança para dar um aspecto elegante
+            escalaFinal = escalaFinal * 0.95; 
+
+            // Aplica o transform dinamicamente
+            envelope.style.transform = `scale(${escalaFinal})`;
+        }
+
+        function abrirConvite() {
+            const envelope = document.getElementById('envelope');
+            
+            if(envelope.classList.contains('aberto')) return;
+
+            envelope.classList.add('aberto');
+
+            // Aplica o cálculo do zoom completo imediatamente
+            aplicarZoomMaximo();
+
+            // Garante que o zoom se ajuste caso o usuário mude a orientação do celular ou redimensione o navegador
+            window.addEventListener('resize', aplicarZoomMaximo);
+
+            // Dispara as partículas a partir do centro da tela
+            const centroX = window.innerWidth / 2;
+            const centroY = window.innerHeight / 2;
+
+            // Aumentei para 60 borboletas para criar uma explosão mais rica visualmente
+            for (let i = 0; i < 60; i++) {
+                listaBorboletas.push(new Borboleta(centroX, centroY));
+            }
+
+            animarParticulas();
+        }
+    </script>
+
+</body>
+</html>
